@@ -18,6 +18,9 @@ warnings.filterwarnings("ignore")
 
 import pandas as pd
 import numpy as np
+
+import matplotlib.pyplot as plt
+
 from sklearn.model_selection     import train_test_split, cross_val_score
 from sklearn.preprocessing       import StandardScaler
 from sklearn.tree                import DecisionTreeClassifier, DecisionTreeRegressor
@@ -36,6 +39,49 @@ try:
 except ImportError:
     HAS_XGB = False
     print("  [INFO] xgboost not installed — skipping XGBoost models")
+
+def save_table_as_png(df, title, filename, highlight_col=None, ascending=False):
+    """Save DataFrame as styled table PNG"""
+    fig, ax = plt.subplots(figsize=(len(df.columns) * 1.8, len(df) * 0.6 + 1.2))
+    ax.axis("off")
+
+    # round numeric
+    df_show = df.copy()
+    for col in df_show.select_dtypes(include="number").columns:
+        df_show[col] = df_show[col].map(lambda x: f"{x:.4f}")
+
+    tbl = ax.table(
+        cellText  = df_show.values,
+        colLabels = df_show.columns,
+        cellLoc   = "center",
+        loc       = "center",
+    )
+    tbl.auto_set_font_size(False)
+    tbl.set_fontsize(10)
+    tbl.scale(1.2, 1.8)
+
+    # header style
+    for j in range(len(df_show.columns)):
+        tbl[0, j].set_facecolor("#2C3E50")
+        tbl[0, j].set_text_props(color="white", fontweight="bold")
+
+    # row alternating color
+    for i in range(1, len(df) + 1):
+        for j in range(len(df_show.columns)):
+            tbl[i, j].set_facecolor("#F0F4F8" if i % 2 == 0 else "white")
+
+    # highlight best row (highlight_col)
+    if highlight_col and highlight_col in df.columns:
+        best_idx = df[highlight_col].astype(float).idxmax() if not ascending \
+                   else df[highlight_col].astype(float).idxmin()
+        for j in range(len(df_show.columns)):
+            tbl[best_idx + 1, j].set_facecolor("#D5F5E3")   # green highlight
+
+    ax.set_title(title, fontsize=14, fontweight="bold", pad=16)
+    plt.tight_layout()
+    plt.savefig(filename, dpi=150, bbox_inches="tight", facecolor="white")
+    plt.close(fig)
+    print(f"  [Saved] {filename}")
 
 # ==============================================================================
 # 1. LOAD & PREPARE DATA
@@ -57,11 +103,6 @@ except ImportError:
 # X_train, X_test, yc_train, yc_test, yr_train, yr_test = train_test_split(
 #     X, y_cls, y_reg, test_size=0.2, random_state=42, stratify=y_cls
 # )
-
-# # Scale (needed for LR, SVM, MLP)
-# scaler  = StandardScaler()
-# Xs_train = scaler.fit_transform(X_train)
-# Xs_test  = scaler.transform(X_test)
 
 train_df = pd.read_csv("DataSet/supervised_dataset.csv")
 test_df  = pd.read_csv("DataSet/supervised_dataset_test.csv")
@@ -211,6 +252,19 @@ print("  REGRESSION RESULTS  (sorted by R² ↓)")
 print("="*65)
 print(fmt_table(reg_results, round_cols=["MAE","RMSE"],
                 pct_cols=["R²","CV R² (5-fold)"]))
+
+save_table_as_png(
+    clf_results,
+    title        = "Classification Results  (sorted by ROC-AUC ↓)",
+    filename     = "output/clf_results_table.png",
+    highlight_col= "ROC-AUC",
+)
+save_table_as_png(
+    reg_results,
+    title        = "Regression Results  (sorted by R² ↓)",
+    filename     = "output/reg_results_table.png",
+    highlight_col= "R²",
+)
 
 # ==============================================================================
 # 6. EXPORT TO CSV
