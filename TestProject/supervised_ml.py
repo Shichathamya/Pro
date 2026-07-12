@@ -30,7 +30,7 @@ from sklearn.ensemble            import (RandomForestClassifier, RandomForestReg
                                          GradientBoostingClassifier, GradientBoostingRegressor)
 from sklearn.neural_network      import MLPClassifier, MLPRegressor
 from sklearn.metrics             import (accuracy_score, f1_score, roc_auc_score,
-                                         precision_score, recall_score,
+                                         precision_score, recall_score,cohen_kappa_score,
                                          mean_absolute_error, mean_squared_error, r2_score)
 
 try:
@@ -175,13 +175,14 @@ def run_classification(models):
         cv_auc = cross_val_score(model, Xtr, yc_train, cv=5,
                                  scoring="roc_auc", n_jobs=-1).mean()
         rows.append({
-            "Model"         : name,
-            "Accuracy"      : accuracy_score(yc_test, y_pred),
-            "Precision"     : precision_score(yc_test, y_pred, zero_division=0),
-            "Recall"        : recall_score(yc_test, y_pred, zero_division=0),
-            "F1-Score"      : f1_score(yc_test, y_pred, zero_division=0),
-            "ROC-AUC"       : roc_auc_score(yc_test, y_prob),
-            "CV AUC (5-fold)": cv_auc,
+            "Model"           : name,
+            "Accuracy"        : accuracy_score(yc_test, y_pred),
+            "Precision"       : precision_score(yc_test, y_pred, zero_division=0),
+            "Recall"          : recall_score(yc_test, y_pred, zero_division=0),
+            "F1-Score"        : f1_score(yc_test, y_pred, zero_division=0),
+            "ROC-AUC"         : roc_auc_score(yc_test, y_prob),
+            "Cohen's Kappa"   : cohen_kappa_score(yc_test, y_pred),
+            "CV AUC (5-fold)" : cv_auc,
         })
         print(f"  [CLF] {name:<25} AUC={rows[-1]['ROC-AUC']:.4f}  F1={rows[-1]['F1-Score']:.4f}")
     return pd.DataFrame(rows).sort_values("ROC-AUC", ascending=False).reset_index(drop=True)

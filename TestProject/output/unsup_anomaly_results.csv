@@ -1,5 +1,0 @@
-Model,Contamination,n_anomalies,anomaly_pct,mean_anomaly_score,mean_normal_score
-Isolation Forest (cont=0.05),0.05,550,5.0,0.5844,0.4555
-Isolation Forest (cont=0.1),0.1,1100,10.0,0.5513,0.452
-"LOF (k=20, cont=0.05)",0.05,550,5.0,1.271,1.0452
-"LOF (k=20, cont=0.1)",0.1,1100,10.0,1.2226,1.038
