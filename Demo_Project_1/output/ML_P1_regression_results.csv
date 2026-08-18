@@ -1,2 +1,0 @@
-Model,MAE,RMSE,R²,CV R² (5-fold),EVE (CV MAE),EVE Std
-Random Forest,313.5205,697.1378,0.968,0.9728,301.9261,9.6553
