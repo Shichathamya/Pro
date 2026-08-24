@@ -2,8 +2,8 @@
 EDA_Solar.py
 ============
 EDA for Solar Power Generation
-- Scatter Plot (auto-select best polynomial degree 0-2)
-- Correlation Heatmap (best of Pearson/Spearman)
+- Scatter Plot (vs AC Power only)
+- Correlation Heatmap (Pearson/Spearman + Mutual Information)
 - Print summary
 """
 
@@ -12,10 +12,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-from sklearn.metrics       import r2_score
-from sklearn.preprocessing import PolynomialFeatures
-from sklearn.linear_model  import LinearRegression
-from sklearn.pipeline      import make_pipeline
+from sklearn.feature_selection import mutual_info_regression
 
 OUTPUT_DIR  = os.path.join(os.path.dirname(__file__), "output")
 DATASET_DIR = os.path.join(os.path.dirname(__file__), "Dataset")
@@ -50,7 +47,6 @@ PLANTS = {
 def load_plant(plant_num):
     df = pd.read_csv(os.path.join(DATASET_DIR, PLANTS[plant_num]))
     df["DATE_TIME"] = pd.to_datetime(df["DATE_TIME"])
-
     df["HOUR"]      = df["DATE_TIME"].dt.hour
     df["MINUTE"]    = df["DATE_TIME"].dt.minute
     df["DAY"]       = df["DATE_TIME"].dt.day
@@ -58,54 +54,11 @@ def load_plant(plant_num):
     df["DATE"]      = df["DATE_TIME"].dt.date
     df["TIME_MIN"]  = df["HOUR"] * 60 + df["MINUTE"]
     df["TIME_SLOT"] = (df["TIME_MIN"] / 15).astype(int)
-
-    df_day = df[df["IRRADIATION"] > 0].copy()
+    df_day          = df[df["IRRADIATION"] > 0].copy()
     return df, df_day
 
 # ==============================================================================
-# HELPER — best polynomial degree 0-2
-# ==============================================================================
-
-def best_poly_trend(x_vals, y_vals, x_line):
-    results = {}
-
-    for deg in [0, 1, 2]:
-        try:
-            if deg == 0:
-                y_pred  = np.full_like(y_vals, y_vals.mean(), dtype=float)
-                y_line_ = np.full_like(x_line, y_vals.mean(), dtype=float)
-            else:
-                pipe    = make_pipeline(PolynomialFeatures(deg),
-                                        LinearRegression())
-                pipe.fit(x_vals.reshape(-1, 1), y_vals)
-                y_pred  = pipe.predict(x_vals.reshape(-1, 1))
-                y_line_ = pipe.predict(x_line.reshape(-1, 1))
-
-            r2 = r2_score(y_vals, y_pred)
-            results[deg] = {"r2": r2, "y_line": y_line_}
-        except Exception:
-            pass
-
-    # select lowest degree unless improvement > 5%
-    best_degree = 0
-    for deg in [0, 1, 2]:
-        if deg not in results:
-            continue
-        if deg == 0:
-            best_degree = 0
-            continue
-        r2_current  = results[deg]["r2"]
-        r2_previous = results[deg - 1]["r2"]
-        if r2_current - r2_previous > 0.05:
-            best_degree = deg
-
-    best_r2     = results[best_degree]["r2"]
-    best_y_line = results[best_degree]["y_line"]
-
-    return best_degree, best_r2, best_y_line
-
-# ==============================================================================
-# FIGURE 1 — Scatter Plots
+# FIGURE 1 — Scatter Plots vs AC Power
 # ==============================================================================
 
 def plot_scatter(df_day, plant_num):
@@ -113,18 +66,14 @@ def plot_scatter(df_day, plant_num):
     sample = df_day.sample(min(3000, len(df_day)), random_state=42)
 
     SCATTER_PAIRS = [
-        ("IRRADIATION",         "AC_POWER",           "Irradiation vs AC Power",         SOLAR),
-        ("MODULE_TEMPERATURE",  "AC_POWER",            "Module Temp vs AC Power",         RED),
-        ("AMBIENT_TEMPERATURE", "AC_POWER",            "Ambient Temp vs AC Power",        GREEN),
-        ("MODULE_TEMPERATURE",  "IRRADIATION",         "Module Temp vs Irradiation",      SOLAR),
-        ("TIME_SLOT",           "AC_POWER",            "Time (15-min) vs AC Power",       BLUE),
-        ("AMBIENT_TEMPERATURE", "MODULE_TEMPERATURE",  "Ambient Temp vs Module Temp",     RED),
-        ("IRRADIATION",         "DAILY_YIELD",         "Irradiation vs Daily Yield",      GREEN),
-        ("TIME_SLOT",           "IRRADIATION",         "Time (15-min) vs Irradiation",    SOLAR),
-        ("AMBIENT_TEMPERATURE", "DAILY_YIELD",         "Ambient Temp vs Daily Yield",     BLUE),
+        ("IRRADIATION",         "AC_POWER", "Irradiation vs AC Power",     SOLAR),
+        ("MODULE_TEMPERATURE",  "AC_POWER", "Module Temp vs AC Power",      RED),
+        ("AMBIENT_TEMPERATURE", "AC_POWER", "Ambient Temp vs AC Power",     GREEN),
+        ("HOUR",                "AC_POWER", "Hour vs AC Power",             BLUE),
+        ("TIME_SLOT",           "AC_POWER", "Time (15-min) vs AC Power",    BLUE),
+        ("DAILY_YIELD",         "AC_POWER", "Daily Yield vs AC Power",      SOLAR),
     ]
 
-    # global axis limits
     axis_limits = {}
     all_cols = set()
     for x_col, y_col, _, _ in SCATTER_PAIRS:
@@ -137,24 +86,12 @@ def plot_scatter(df_day, plant_num):
     nrows = int(np.ceil(len(SCATTER_PAIRS) / ncols))
 
     fig, axes = plt.subplots(nrows, ncols, figsize=(18, nrows * 5))
-    fig.suptitle(f"Plant {plant_num} — Scatter Plots  "
-                 f"(auto best trend deg 0-2, threshold +5%)",
+    fig.suptitle(f"Plant {plant_num} — Scatter Plots vs AC Power",
                  fontsize=15, fontweight="bold", y=1.01)
 
-    degree_summary = []
-
     for ax, (x_col, y_col, title, color) in zip(axes.flat, SCATTER_PAIRS):
-        x_vals = sample[x_col].values.astype(float)
-        y_vals = sample[y_col].values.astype(float)
-
-        ax.scatter(x_vals, y_vals, c=color, alpha=0.35, s=8, rasterized=True)
-
-        x_line                    = np.linspace(x_vals.min(), x_vals.max(), 300)
-        best_deg, best_r2, y_line = best_poly_trend(x_vals, y_vals, x_line)
-
-        ax.plot(x_line, y_line, color=RED, linewidth=2,
-                linestyle="--", label=f"deg={best_deg}  R2={best_r2:.3f}")
-        ax.legend(fontsize=8)
+        ax.scatter(sample[x_col], sample[y_col],
+                   c=color, alpha=0.35, s=8, rasterized=True)
 
         if x_col == "TIME_SLOT":
             tick_slots  = sorted(df_day["TIME_SLOT"].unique())[::4]
@@ -169,13 +106,7 @@ def plot_scatter(df_day, plant_num):
 
         ax.set_ylim(axis_limits[y_col])
         ax.set_title(title, fontsize=10, fontweight="bold")
-        ax.set_ylabel(y_col.replace("_", " "), fontsize=8)
-
-        degree_summary.append({
-            "pair"       : f"{x_col} -> {y_col}",
-            "best_degree": best_deg,
-            "R2"         : round(best_r2, 4),
-        })
+        ax.set_ylabel("AC Power (kW)", fontsize=8)
 
     for ax in list(axes.flat)[len(SCATTER_PAIRS):]:
         ax.set_visible(False)
@@ -186,16 +117,14 @@ def plot_scatter(df_day, plant_num):
     plt.close(fig)
     print(f"  [Saved] EDA_P{plant_num}_Scatter.png")
 
-    return pd.DataFrame(degree_summary)
-
 # ==============================================================================
-# FIGURE 2 — Correlation Heatmap (best of Pearson/Spearman)
+# FIGURE 2 — Correlation Heatmap
 # ==============================================================================
 
 def plot_heatmap(df_day, plant_num):
 
     CORR_COLS = [
-        "AC_POWER", "DC_POWER", "DAILY_YIELD",
+        "AC_POWER", "DC_POWER",
         "AMBIENT_TEMPERATURE", "MODULE_TEMPERATURE",
         "IRRADIATION", "HOUR",
     ]
@@ -203,6 +132,7 @@ def plot_heatmap(df_day, plant_num):
     pearson  = df_day[CORR_COLS].corr(method="pearson")
     spearman = df_day[CORR_COLS].corr(method="spearman")
 
+    # best of Pearson/Spearman
     best_corr  = pearson.copy()
     method_map = pd.DataFrame("P", index=pearson.index, columns=pearson.columns)
     for r in CORR_COLS:
@@ -211,35 +141,70 @@ def plot_heatmap(df_day, plant_num):
                 best_corr.loc[r, c]  = spearman.loc[r, c]
                 method_map.loc[r, c] = "S"
 
-    mask = np.triu(np.ones_like(best_corr, dtype=bool))
+    # Mutual Information
+    X_mi = df_day[CORR_COLS].dropna()
+    mi_rows = {}
+    for target in CORR_COLS:
+        features  = [c for c in CORR_COLS if c != target]
+        mi_scores = mutual_info_regression(
+            X_mi[features], X_mi[target], random_state=42
+        )
+        mi_norm = mi_scores / (mi_scores.max() + 1e-9)
+        mi_rows[target] = dict(zip(features, mi_norm))
 
-    fig, ax = plt.subplots(figsize=(11, 9))
-    fig.suptitle(f"Plant {plant_num} — Correlation Heatmap\n"
-                 f"(P=Pearson, S=Spearman — higher |r| selected)",
+    mi_df  = pd.DataFrame(mi_rows).fillna(0)
+    mi_sym = (mi_df + mi_df.T) / 2
+    mi_sym = mi_sym.reindex(index=CORR_COLS, columns=CORR_COLS).fillna(0)
+
+    mask    = np.triu(np.ones_like(best_corr, dtype=bool))
+    mask_mi = np.triu(np.ones_like(mi_sym,   dtype=bool))
+    n       = len(CORR_COLS)
+
+    fig, axes = plt.subplots(1, 2, figsize=(22, 9))
+    fig.suptitle(f"Plant {plant_num} — Correlation Heatmap",
                  fontsize=14, fontweight="bold")
 
+    # Left: Pearson/Spearman
     sns.heatmap(
-        best_corr, mask=mask, ax=ax,
+        best_corr, mask=mask, ax=axes[0],
         cmap="RdBu_r", center=0, vmin=-1, vmax=1,
         annot=False, linewidths=0.5, cbar_kws={"shrink": 0.8},
     )
-
-    n = len(CORR_COLS)
     for i in range(n):
         for j in range(n):
             if i > j:
                 val    = best_corr.iloc[i, j]
                 method = method_map.iloc[i, j]
                 color  = "white" if abs(val) > 0.5 else "black"
-                ax.text(j + 0.5, i + 0.38, f"{val:.2f}",
-                        ha="center", va="center",
-                        fontsize=9, color=color, fontweight="bold")
-                ax.text(j + 0.5, i + 0.65, f"({method})",
-                        ha="center", va="center",
-                        fontsize=7, color=color)
+                axes[0].text(j + 0.5, i + 0.38, f"{val:.2f}",
+                             ha="center", va="center",
+                             fontsize=9, color=color, fontweight="bold")
+                axes[0].text(j + 0.5, i + 0.65, f"({method})",
+                             ha="center", va="center",
+                             fontsize=7, color=color)
+    axes[0].set_title("Pearson / Spearman  (higher |r| selected)",
+                      fontsize=12, fontweight="bold")
+    axes[0].tick_params(axis="x", rotation=45, labelsize=9)
+    axes[0].tick_params(axis="y", rotation=0,  labelsize=9)
 
-    ax.tick_params(axis="x", rotation=45, labelsize=9)
-    ax.tick_params(axis="y", rotation=0,  labelsize=9)
+    # Right: Mutual Information
+    sns.heatmap(
+        mi_sym, mask=mask_mi, ax=axes[1],
+        cmap="YlOrRd", vmin=0, vmax=1,
+        annot=False, linewidths=0.5, cbar_kws={"shrink": 0.8},
+    )
+    for i in range(n):
+        for j in range(n):
+            if i > j:
+                val   = mi_sym.iloc[i, j]
+                color = "white" if val > 0.6 else "black"
+                axes[1].text(j + 0.5, i + 0.5, f"{val:.2f}",
+                             ha="center", va="center",
+                             fontsize=9, color=color, fontweight="bold")
+    axes[1].set_title("Mutual Information\n(captures non-linear + bell curve)",
+                      fontsize=12, fontweight="bold")
+    axes[1].tick_params(axis="x", rotation=45, labelsize=9)
+    axes[1].tick_params(axis="y", rotation=0,  labelsize=9)
 
     plt.tight_layout()
     out = os.path.join(OUTPUT_DIR, f"EDA_P{plant_num}_Heatmap.png")
@@ -253,14 +218,11 @@ def plot_heatmap(df_day, plant_num):
 # PRINT SUMMARY
 # ==============================================================================
 
-def print_summary(plant_num, df_day, degree_df, best_corr, method_map):
+def print_summary(plant_num, df_day, best_corr, method_map):
     print(f"\n{'='*65}")
     print(f"  Plant {plant_num} — EDA Summary")
     print(f"{'='*65}")
     print(f"  Rows (daytime) : {len(df_day):,}")
-
-    print(f"\n-- Best Polynomial Degree per Scatter Pair --")
-    print(degree_df.to_string(index=False))
 
     print(f"\n-- Best Correlation with AC_POWER -----------")
     rows = []
@@ -287,8 +249,8 @@ for plant_num in [1, 2]:
     df, df_day = load_plant(plant_num)
     print(f"  Rows: {len(df):,} | Daytime: {len(df_day):,}")
 
-    degree_df       = plot_scatter(df_day, plant_num)
+    plot_scatter(df_day, plant_num)
     best_corr, mmap = plot_heatmap(df_day, plant_num)
-    print_summary(plant_num, df_day, degree_df, best_corr, mmap)
+    print_summary(plant_num, df_day, best_corr, mmap)
 
 print("\n  Done -- 4 PNG files saved to output/")
