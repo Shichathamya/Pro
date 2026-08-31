@@ -1,5 +1,5 @@
 """
-Inverter_Sensor_Analysis.py
+I.py
 ============================
 1. แสดงค่าต่อ Inverter แต่ละ Plant
 2. ค่า Sensor ในช่วงเวลา แต่ละ Plant
