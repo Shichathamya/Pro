@@ -1,0 +1,6 @@
+Model,MAE,RMSE,R2,CV_R2,MAPE_%
+Random Forest,25.86,47.9,0.9841,0.9728,5.1
+Decision Tree,30.19,52.94,0.9806,0.9709,6.47
+Polynomial deg=3,32.09,56.55,0.9779,0.9756,9.84
+Polynomial deg=2,33.6,57.69,0.977,0.9749,9.9
+Linear Regression,41.03,64.03,0.9717,0.9686,28.07
