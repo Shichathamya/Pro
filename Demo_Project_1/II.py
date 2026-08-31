@@ -1,5 +1,5 @@
 """
-EDA_Solar.py
+II.py
 ============
 EDA for Solar Power Generation
 - Scatter Plot (vs AC Power only)
