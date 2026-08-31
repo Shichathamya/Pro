@@ -12,13 +12,18 @@ os.makedirs(DATASET_DIR, exist_ok=True)
 
 
 def join_plant(plant_num):
-    gen    = pd.read_csv(os.path.join(DATASET_DIR, f"Plant_{plant_num}_Generation_Data.csv"))
-    sensor = pd.read_csv(os.path.join(DATASET_DIR, f"Plant_{plant_num}_Weather_Sensor_Data.csv"))
+    gen    = pd.read_csv(os.path.join(DATASET_DIR,
+                         f"Plant_{plant_num}_Generation_Data_Fixed.csv"))
+    sensor = pd.read_csv(os.path.join(DATASET_DIR,
+                         f"Plant_{plant_num}_Weather_Sensor_Data_Fixed.csv"))
 
-    gen["DATE_TIME"]    = pd.to_datetime(gen["DATE_TIME"],    format="mixed", dayfirst=True)
-    sensor["DATE_TIME"] = pd.to_datetime(sensor["DATE_TIME"], format="mixed", dayfirst=True)    
+    gen["DATE_TIME"]    = pd.to_datetime(gen["DATE_TIME"],
+                                          format="mixed", dayfirst=True)
+    sensor["DATE_TIME"] = pd.to_datetime(sensor["DATE_TIME"],
+                                          format="mixed", dayfirst=True)
 
-    sensor_clean = sensor[["DATE_TIME", "AMBIENT_TEMPERATURE", "MODULE_TEMPERATURE", "IRRADIATION"]]
+    sensor_clean = sensor[["DATE_TIME", "AMBIENT_TEMPERATURE",
+                            "MODULE_TEMPERATURE", "IRRADIATION"]]
 
     joined = pd.merge(gen, sensor_clean, on="DATE_TIME", how="left")
 
